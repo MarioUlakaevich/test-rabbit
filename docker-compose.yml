@@ -1,0 +1,32 @@
+version: '3'
+services:
+  rabbitmq:
+    image: "rabbitmq:3-management"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  microservice_m1:
+    build: 
+      context: ./m1
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - FIRST=first_queue
+      - SECOND=second_queue
+    depends_on:
+      - rabbitmq
+
+  microservice_m2:
+    build: 
+      context: ./m2
+      dockerfile: Dockerfile
+    environment:
+      - RABBITMQ_URL=amqp://rabbitmq:5672
+      - FIRST=first_queue
+      - SECOND=second_queue
+    depends_on:
+      - rabbitmq
+

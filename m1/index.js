@@ -1,10 +1,11 @@
 const express = require('express');
 const amqp = require('amqplib');
 const { v4: uuidv4 } = require('uuid');
+const logger = require('./logger');
 
-const RABBITMQ_URL = process.env.RABBITMQ_URL || "amqp://localhost:5672";
-const FIRST = process.env.FIRST || "first";
-const SECOND = process.env.SECOND || "second";
+const RABBITMQ_URL = process.env.RABBITMQ_URL || "amqp://rabbitmq:5672";
+const FIRST = process.env.FIRST || "first_queue";
+const SECOND = process.env.SECOND || "second_queue";
 
 const app = express();
 app.use(express.json());
@@ -16,34 +17,39 @@ async function connect() {
     try {
         connection = await amqp.connect(RABBITMQ_URL);
         channel = await connection.createChannel();
-        await channel.assertQueue('', { exclusive: true });
+        await channel.assertQueue(FIRST, { exclusive: true });
+        logger.info(" [x] Подключение к RabbitMQ успешно");
     } catch (error) {
-        console.error("Ошибка подключения к RabbitMQ:", error);
+        console.error(" [x] Ошибка подключения к RabbitMQ:", error);
     }
 }
 
-connect().then(()=>{
-    channel.consume(FIRST, (msg) => {
-        const correlationId = msg.properties.correlationId;
-        const responseResolve = responsePromises.get(correlationId);
-        if (responseResolve) {
-            responseResolve(JSON.parse(msg.content.toString()));
-            responsePromises.delete(correlationId);
-        }
-    }, { noAck: true });
-}).catch(console.error);
+setTimeout(() => {
+    connect().then(()=>{
+        channel.consume(FIRST, (msg) => {
+            logger.info(` [x] Пришло сообщение от второго сервиса с id: ${msg.properties.correlationId}`);
+            const correlationId = msg.properties.correlationId;
+            const responseResolve = responsePromises.get(correlationId);
+            if (responseResolve) {
+                responseResolve(JSON.parse(msg.content));
+                responsePromises.delete(correlationId);
+            }
+        }, { noAck: true });
+    }).catch(console.error);
+    
+}, 13000);
 
 app.post('/api/v1/queue', async (req, res) => {
     const {number} = req.body;
     const correlationId = uuidv4();
 
-    console.log(` [x] Отправка числа ${number}, id ${correlationId}`);
+    logger.info(` [x] Отправка числа ${number} с id: ${correlationId}`);
 
     const responsePromise = new Promise((resolve, reject) => {
         responsePromises.set(correlationId, resolve);
         setTimeout(() => {
             responsePromises.delete(correlationId);
-            reject(new Error('Timeout waiting for response from RabbitMQ'));
+            reject(new Error(' [x] Долгое ожидание ответа со второго сервера! Завершение задачи.'));
         }, 7000);
     });
     channel.sendToQueue(
@@ -64,5 +70,5 @@ app.post('/api/v1/queue', async (req, res) => {
 
 
 app.listen(3000, () => {
-    console.log("Первый сервис запущен на порту 3000");
+    logger.info("Первый сервис запущен на порту 3000");
 });
