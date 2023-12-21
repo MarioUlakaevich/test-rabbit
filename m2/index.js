@@ -1,14 +1,17 @@
+// Импорт зависимостей
 const express = require('express');
 const amqp = require('amqplib');
 const logger = require('./logger');
 
 const app = express();
 
+// Импорт переменных среды
 const RABBITMQ_URL = process.env.RABBITMQ_URL || "amqp://rabbitmq:5672";
 const SECOND = process.env.SECOND || "second_queue";
 
 let channel, connection;
 
+// Функция подключения к RabbitMQ
 async function connect() {
   try {
     connection = await amqp.connect(RABBITMQ_URL);
@@ -19,7 +22,11 @@ async function connect() {
     console.error(" [x] Ошибка подключения к RabbitMQ:", error);
   }
 }
-  
+ 
+// Создаю подключение с задержкой в 13 сек, чтобы RabbitMQ успел подняться
+// Создаю консьюмер для второго сервиса.
+// При получении сообщения от первого сервиса, получаем число и обрабатываем его.
+// С задерькой в 5 сек отправляем ответ в очередь первого сервиса.
 setTimeout(() => {
   connect().then(() => {
     logger.info(' [x] Одижание RPC запроса');

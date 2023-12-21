@@ -1,5 +1,6 @@
 const winston = require('winston');
 
+//Настраиваю логгер для вывода полной информации в консоль и в файл
 const logger = winston.createLogger({
     level: 'info',
     format: winston.format.combine(

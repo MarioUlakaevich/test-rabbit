@@ -1,8 +1,10 @@
+// Импорт зависимостей
 const express = require('express');
 const amqp = require('amqplib');
 const { v4: uuidv4 } = require('uuid');
 const logger = require('./logger');
 
+// Переменные среды
 const RABBITMQ_URL = process.env.RABBITMQ_URL || "amqp://rabbitmq:5672";
 const FIRST = process.env.FIRST || "first_queue";
 const SECOND = process.env.SECOND || "second_queue";
@@ -11,8 +13,9 @@ const app = express();
 app.use(express.json());
 
 let channel, connection;
-const responsePromises = new Map();
+const responsePromises = new Map(); //  Создание Map для хранения промисов и их резолвов
 
+//Функция подключения к RabbitMQ
 async function connect() {
     try {
         connection = await amqp.connect(RABBITMQ_URL);
@@ -24,6 +27,8 @@ async function connect() {
     }
 }
 
+// Создаю подключение с задержкой в 13 сек, чтобы RabbitMQ успел подняться
+// Создаю консьюмер для первого сервиса. При получении сообщения вызывается функция, которая резолвит промис
 setTimeout(() => {
     connect().then(()=>{
         channel.consume(FIRST, (msg) => {
@@ -39,6 +44,9 @@ setTimeout(() => {
     
 }, 13000);
 
+// Маршрутизатор первого сервиса для обработки POST запроса.
+// В нём содаем промис который ждёт ответа от второго сервиса. Если ответа нет в течение 7 секунд, то завершаем задачу
+// Отправляем полученные данные из POST запроса второму сервису на обработку. После получения ответа возвращаем его клиенту
 app.post('/api/v1/queue', async (req, res) => {
     const {number} = req.body;
     const correlationId = uuidv4();
